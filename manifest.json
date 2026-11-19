@@ -1,8 +1,9 @@
 {
   "name": "Salon Cashier — Offline POS",
   "short_name": "Salon Cashier",
-  "description": "Offline-first Point of Sale and cash flow manager for salons.",
-  "start_url": "./index.html",
+  "version": "2026.11.19.1",
+  "description": "Aplikasi kasir Point of Sale (POS) dan pencatatan arus kas salon yang berjalan offline.",
+  "start_url": "./index.html?v=2026.11.19.2",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
