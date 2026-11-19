@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const APP_VERSION = '2026.11.19.3';
+  const APP_VERSION = '2026.11.19.4';
 
   const STORAGE_KEYS = {
     SERVICES: 'salon_cashier_services_v1',
@@ -19,11 +19,19 @@
     { id: 'srv-6', name: 'Pedicure', price: 75000 }
   ];
 
+  const COMBOS = {
+    'hair-basic': ['srv-1', 'srv-2'],
+    'spa-relax': ['srv-4', 'srv-2'],
+    'nails-duo': ['srv-5', 'srv-6']
+  };
+
   const state = {
     services: loadJSON(STORAGE_KEYS.SERVICES, DEFAULT_SERVICES),
     ledger: loadJSON(STORAGE_KEYS.LEDGER, []),
     cart: loadJSON(STORAGE_KEYS.CART, []),
     theme: localStorage.getItem(STORAGE_KEYS.THEME) || 'light',
+    multiMode: false,
+    selectedMap: {}, // { [serviceId]: qty }
     customerNote: '',
     filterType: 'all',
     filterPeriod: 'monthly'
@@ -42,6 +50,12 @@
     sumMonthIn: document.getElementById('sum-month-in'),
     sumMonthOut: document.getElementById('sum-month-out'),
     sumMonthNet: document.getElementById('sum-month-net'),
+    toggleMultiBtn: document.getElementById('toggle-multi-btn'),
+    quickCombos: document.getElementById('quick-combos'),
+    multiBar: document.getElementById('multi-bar'),
+    multiSelectedCount: document.getElementById('multi-selected-count'),
+    applyMultiBtn: document.getElementById('apply-multi-btn'),
+    cancelMultiBtn: document.getElementById('cancel-multi-btn'),
     toggleServiceFormBtn: document.getElementById('toggle-service-form-btn'),
     serviceForm: document.getElementById('service-form'),
     serviceEditId: document.getElementById('service-edit-id'),
@@ -184,6 +198,7 @@
 
   function deleteService(id) {
     state.services = state.services.filter((s) => s.id !== id);
+    delete state.selectedMap[id];
     if (el.serviceEditId.value === id) resetServiceForm();
     commitAndRender();
   }
@@ -195,13 +210,88 @@
     el.serviceCancelBtn.classList.add('hidden');
   }
 
-  function addToCart(serviceId) {
+  function pushServiceToCart(serviceId, qtyToAdd = 1) {
     const srv = state.services.find((s) => s.id === serviceId);
-    if (!srv) return;
+    if (!srv || qtyToAdd <= 0) return;
+
     const existing = state.cart.find((item) => item.serviceId === serviceId);
-    if (existing) existing.qty += 1;
-    else state.cart.push({ serviceId: srv.id, name: srv.name, price: srv.price, qty: 1 });
+    if (existing) {
+      existing.qty += qtyToAdd;
+    } else {
+      state.cart.push({
+        serviceId: srv.id,
+        name: srv.name,
+        price: srv.price,
+        qty: qtyToAdd
+      });
+    }
+  }
+
+  function addToCart(serviceId) {
+    pushServiceToCart(serviceId, 1);
     commitAndRender();
+  }
+
+  function addMultipleServicesToCart(serviceIds) {
+    for (const id of serviceIds) {
+      pushServiceToCart(id, 1);
+    }
+    commitAndRender();
+  }
+
+  function toggleMultiSelection(serviceId) {
+    if (state.selectedMap[serviceId]) {
+      delete state.selectedMap[serviceId];
+    } else {
+      state.selectedMap[serviceId] = 1;
+    }
+    renderServices();
+    renderMultiBar();
+  }
+
+  function changeMultiQty(serviceId, delta) {
+    const current = state.selectedMap[serviceId] || 0;
+    const next = current + delta;
+    if (next <= 0) {
+      delete state.selectedMap[serviceId];
+    } else {
+      state.selectedMap[serviceId] = next;
+    }
+    renderServices();
+    renderMultiBar();
+  }
+
+  function applyMultiSelection() {
+    const entries = Object.entries(state.selectedMap);
+    if (entries.length === 0) return;
+
+    for (const [serviceId, qty] of entries) {
+      pushServiceToCart(serviceId, qty);
+    }
+
+    state.selectedMap = {};
+    state.multiMode = false;
+    commitAndRender();
+  }
+
+  function cancelMultiMode() {
+    state.selectedMap = {};
+    state.multiMode = false;
+    renderServices();
+    renderMultiBar();
+  }
+
+  function renderMultiBar() {
+    el.multiBar.classList.toggle('hidden', !state.multiMode);
+    el.toggleMultiBtn.classList.toggle('btn-primary', state.multiMode);
+    el.toggleMultiBtn.classList.toggle('btn-secondary', !state.multiMode);
+
+    const entries = Object.entries(state.selectedMap);
+    const totalServices = entries.length;
+    const totalQty = entries.reduce((sum, [, q]) => sum + q, 0);
+
+    el.multiSelectedCount.textContent = `${totalServices} layanan (${totalQty} item) dipilih`;
+    el.applyMultiBtn.disabled = totalServices === 0;
   }
 
   function updateCartQty(serviceId, delta) {
@@ -313,21 +403,37 @@
 
   function renderServices() {
     el.serviceGrid.innerHTML = state.services
-      .map(
-        (srv) => `
-        <div class="service-tile" data-action="add" data-id="${srv.id}">
-          <div class="service-tile-top">
-            <span class="service-title">${escapeHTML(srv.name)}</span>
-          </div>
-          <div class="service-row-bottom">
-            <span class="service-price tabular">${formatCurrency(srv.price)}</span>
-            <div class="service-controls">
-              <button type="button" class="icon-btn" data-action="edit" data-id="${srv.id}">Edit</button>
-              <button type="button" class="icon-btn" data-action="delete" data-id="${srv.id}">&times;</button>
+      .map((srv) => {
+        const selectedQty = state.selectedMap[srv.id] || 0;
+        const isSelected = state.multiMode && selectedQty > 0;
+
+        const multiControlsHTML = state.multiMode
+          ? `
+            <div class="multi-qty-box" data-stop-select="true">
+              <span class="multi-qty-label">${isSelected ? 'Dipilih' : 'Klik kartu'}</span>
+              <div class="qty-controls">
+                <button type="button" class="qty-btn" data-multi-action="dec" data-id="${srv.id}">-</button>
+                <span class="qty-val tabular">${selectedQty}</span>
+                <button type="button" class="qty-btn" data-multi-action="inc" data-id="${srv.id}">+</button>
+              </div>
+            </div>`
+          : '';
+
+        return `
+          <div class="service-tile ${isSelected ? 'is-selected' : ''}" data-action="tile" data-id="${srv.id}">
+            <div class="service-tile-top">
+              <span class="service-title">${escapeHTML(srv.name)}</span>
             </div>
-          </div>
-        </div>`
-      )
+            <div class="service-row-bottom">
+              <span class="service-price tabular">${formatCurrency(srv.price)}</span>
+              <div class="service-controls">
+                <button type="button" class="icon-btn" data-action="edit" data-id="${srv.id}">Edit</button>
+                <button type="button" class="icon-btn" data-action="delete" data-id="${srv.id}">&times;</button>
+              </div>
+            </div>
+            ${multiControlsHTML}
+          </div>`;
+      })
       .join('');
   }
 
@@ -444,6 +550,7 @@
     saveState();
     applyTheme();
     renderServices();
+    renderMultiBar();
     renderCartAndPreview();
     renderSummaries();
     renderLedger();
@@ -455,6 +562,23 @@
       commitAndRender();
     });
 
+    el.toggleMultiBtn.addEventListener('click', () => {
+      state.multiMode = !state.multiMode;
+      if (!state.multiMode) state.selectedMap = {};
+      renderServices();
+      renderMultiBar();
+    });
+
+    el.applyMultiBtn.addEventListener('click', applyMultiSelection);
+    el.cancelMultiBtn.addEventListener('click', cancelMultiMode);
+
+    el.quickCombos.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-combo]');
+      if (!btn) return;
+      const ids = COMBOS[btn.dataset.combo] || [];
+      addMultipleServicesToCart(ids);
+    });
+
     el.toggleServiceFormBtn.addEventListener('click', () => {
       el.serviceForm.classList.toggle('hidden');
       if (!el.serviceForm.classList.contains('hidden')) el.serviceName.focus();
@@ -464,17 +588,31 @@
     el.serviceCancelBtn.addEventListener('click', resetServiceForm);
 
     el.serviceGrid.addEventListener('click', (e) => {
-      const btn = e.target.closest('[data-action]');
-      if (!btn) return;
-      const { action, id } = btn.dataset;
+      const multiBtn = e.target.closest('[data-multi-action]');
+      if (multiBtn) {
+        e.stopPropagation();
+        const { multiAction, id } = multiBtn.dataset;
+        if (multiAction === 'inc') changeMultiQty(id, 1);
+        if (multiAction === 'dec') changeMultiQty(id, -1);
+        return;
+      }
+
+      const actionEl = e.target.closest('[data-action]');
+      if (!actionEl) return;
+      const { action, id } = actionEl.dataset;
+
       if (action === 'edit') {
         e.stopPropagation();
         editService(id);
       } else if (action === 'delete') {
         e.stopPropagation();
         deleteService(id);
-      } else if (action === 'add') {
-        addToCart(id);
+      } else if (action === 'tile') {
+        if (state.multiMode) {
+          toggleMultiSelection(id);
+        } else {
+          addToCart(id);
+        }
       }
     });
 
