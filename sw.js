@@ -1,4 +1,4 @@
-const APP_VERSION = '2026.11.19.3';
+const APP_VERSION = '2026.11.19.4';
 const CACHE_NAME = `salon-cashier-${APP_VERSION}`;
 
 const ASSETS = [
