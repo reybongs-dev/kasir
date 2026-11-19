@@ -1,16 +1,16 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#111827" />
-  <title>Salon Cashier — Offline POS</title>
-  <link rel="manifest" href="./manifest.json" />
+  <title>Salon Cashier — Kasir Offline</title>
+  <link rel="manifest" href="./manifest.json?v=2026.11.19.3" />
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
   <div class="app-shell">
-    <!-- Top Header -->
+    <!-- Header Atas -->
     <header class="topbar">
       <div class="brand">
         <span class="brand-dot"></span>
@@ -19,101 +19,102 @@
       <div class="topbar-meta">
         <span id="offline-badge" class="badge badge-online">Online</span>
         <span id="live-clock" class="tabular"></span>
+        <button type="button" id="toggle-theme-btn" class="btn btn-ghost btn-sm">Gelap</button>
       </div>
     </header>
 
-    <!-- Financial Summary Cards -->
-    <section class="summary-grid" aria-label="Financial Summary">
+    <!-- Ringkasan Keuangan -->
+    <section class="summary-grid" aria-label="Ringkasan Keuangan">
       <article class="card summary-card">
         <div class="summary-header">
-          <h2>Today</h2>
-          <span class="summary-sub">Daily Cash Flow</span>
+          <h2>Hari Ini</h2>
+          <span class="summary-sub">Arus Kas Harian</span>
         </div>
         <div class="summary-metrics">
-          <div><span>In</span><strong id="sum-today-in" class="tabular text-in">Rp 0</strong></div>
-          <div><span>Out</span><strong id="sum-today-out" class="tabular text-out">Rp 0</strong></div>
-          <div><span>Net</span><strong id="sum-today-net" class="tabular">Rp 0</strong></div>
+          <div><span>Masuk</span><strong id="sum-today-in" class="tabular text-in">Rp 0</strong></div>
+          <div><span>Keluar</span><strong id="sum-today-out" class="tabular text-out">Rp 0</strong></div>
+          <div><span>Bersih</span><strong id="sum-today-net" class="tabular">Rp 0</strong></div>
         </div>
       </article>
 
       <article class="card summary-card">
         <div class="summary-header">
-          <h2>Last 7 Days</h2>
-          <span class="summary-sub">Weekly Cash Flow</span>
+          <h2>7 Hari Terakhir</h2>
+          <span class="summary-sub">Arus Kas Mingguan</span>
         </div>
         <div class="summary-metrics">
-          <div><span>In</span><strong id="sum-week-in" class="tabular text-in">Rp 0</strong></div>
-          <div><span>Out</span><strong id="sum-week-out" class="tabular text-out">Rp 0</strong></div>
-          <div><span>Net</span><strong id="sum-week-net" class="tabular">Rp 0</strong></div>
+          <div><span>Masuk</span><strong id="sum-week-in" class="tabular text-in">Rp 0</strong></div>
+          <div><span>Keluar</span><strong id="sum-week-out" class="tabular text-out">Rp 0</strong></div>
+          <div><span>Bersih</span><strong id="sum-week-net" class="tabular">Rp 0</strong></div>
         </div>
       </article>
 
       <article class="card summary-card">
         <div class="summary-header">
-          <h2>This Month</h2>
-          <span class="summary-sub">Monthly Cash Flow</span>
+          <h2>Bulan Ini</h2>
+          <span class="summary-sub">Arus Kas Bulanan</span>
         </div>
         <div class="summary-metrics">
-          <div><span>In</span><strong id="sum-month-in" class="tabular text-in">Rp 0</strong></div>
-          <div><span>Out</span><strong id="sum-month-out" class="tabular text-out">Rp 0</strong></div>
-          <div><span>Net</span><strong id="sum-month-net" class="tabular">Rp 0</strong></div>
+          <div><span>Masuk</span><strong id="sum-month-in" class="tabular text-in">Rp 0</strong></div>
+          <div><span>Keluar</span><strong id="sum-month-out" class="tabular text-out">Rp 0</strong></div>
+          <div><span>Bersih</span><strong id="sum-month-net" class="tabular">Rp 0</strong></div>
         </div>
       </article>
     </section>
 
-    <!-- Main 2-Column Workspace -->
+    <!-- Area Kerja 2 Kolom -->
     <main class="workspace">
-      <!-- LEFT COLUMN: Services, Expense Entry & Ledger -->
+      <!-- KOLOM KIRI: Layanan, Catat Pengeluaran & Buku Kas -->
       <div class="col-left">
-        <!-- Service Catalog -->
+        <!-- Katalog Layanan -->
         <section class="card">
           <div class="section-head">
-            <h2>Service Catalog</h2>
-            <button type="button" id="toggle-service-form-btn" class="btn btn-ghost btn-sm">+ Manage / Add</button>
+            <h2>Katalog Layanan</h2>
+            <button type="button" id="toggle-service-form-btn" class="btn btn-ghost btn-sm">+ Kelola / Tambah</button>
           </div>
 
           <form id="service-form" class="inline-form hidden" autocomplete="off">
             <input type="hidden" id="service-edit-id" />
-            <input type="text" id="service-name" placeholder="Service name (e.g., Keratin)" required />
-            <input type="number" id="service-price" placeholder="Price" min="0" step="500" required />
+            <input type="text" id="service-name" placeholder="Nama layanan (cth: Keratin)" required />
+            <input type="number" id="service-price" placeholder="Harga" min="0" step="500" required />
             <div class="form-actions">
-              <button type="submit" class="btn btn-primary btn-sm" id="service-submit-btn">Save Service</button>
-              <button type="button" id="service-cancel-btn" class="btn btn-ghost btn-sm hidden">Cancel</button>
+              <button type="submit" class="btn btn-primary btn-sm" id="service-submit-btn">Simpan</button>
+              <button type="button" id="service-cancel-btn" class="btn btn-ghost btn-sm hidden">Batal</button>
             </div>
           </form>
 
           <div id="service-grid" class="service-grid"></div>
         </section>
 
-        <!-- Outgoing Cash Flow (Expense Entry) -->
+        <!-- Catat Pengeluaran -->
         <section class="card">
           <div class="section-head">
-            <h2>Record Outgoing Expense</h2>
-            <span class="muted-label">Cash Outflow</span>
+            <h2>Catat Pengeluaran</h2>
+            <span class="muted-label">Arus Kas Keluar</span>
           </div>
           <form id="expense-form" class="expense-form" autocomplete="off">
-            <input type="text" id="expense-desc" placeholder="Description (e.g., Shampoo restock, Electricity)" required />
-            <input type="number" id="expense-amount" placeholder="Amount" min="1" step="500" required />
+            <input type="text" id="expense-desc" placeholder="Keterangan (cth: Stok sampo, Listrik)" required />
+            <input type="number" id="expense-amount" placeholder="Nominal" min="1" step="500" required />
             <input type="date" id="expense-date" required />
-            <button type="submit" class="btn btn-secondary">Record Expense</button>
+            <button type="submit" class="btn btn-secondary">Simpan Pengeluaran</button>
           </form>
         </section>
 
-        <!-- Transaction Ledger -->
+        <!-- Buku Kas Transaksi -->
         <section class="card">
           <div class="section-head ledger-head">
-            <h2>Transaction Ledger</h2>
+            <h2>Buku Kas Transaksi</h2>
             <div class="filters">
-              <select id="filter-type" aria-label="Filter by transaction type">
-                <option value="all">All Types</option>
-                <option value="in">Incoming (Orders)</option>
-                <option value="out">Outgoing (Expenses)</option>
+              <select id="filter-type" aria-label="Filter tipe transaksi">
+                <option value="all">Semua Tipe</option>
+                <option value="in">Masuk (Order)</option>
+                <option value="out">Keluar (Pengeluaran)</option>
               </select>
-              <select id="filter-period" aria-label="Filter by period">
-                <option value="daily">Today</option>
-                <option value="weekly">Last 7 Days</option>
-                <option value="monthly" selected>This Month</option>
-                <option value="all">All Time</option>
+              <select id="filter-period" aria-label="Filter periode">
+                <option value="daily">Hari Ini</option>
+                <option value="weekly">7 Hari Terakhir</option>
+                <option value="monthly" selected>Bulan Ini</option>
+                <option value="all">Semua Waktu</option>
               </select>
             </div>
           </div>
@@ -122,11 +123,11 @@
             <table class="ledger-table">
               <thead>
                 <tr>
-                  <th>Date &amp; Time</th>
-                  <th>Details / Note</th>
-                  <th>Type</th>
-                  <th class="num">Amount</th>
-                  <th class="num">Receipt</th>
+                  <th>Tanggal &amp; Waktu</th>
+                  <th>Detail / Catatan</th>
+                  <th>Tipe</th>
+                  <th class="num">Nominal</th>
+                  <th class="num">Struk</th>
                 </tr>
               </thead>
               <tbody id="ledger-body"></tbody>
@@ -135,30 +136,28 @@
         </section>
       </div>
 
-      <!-- RIGHT COLUMN: Active Cart & Receipt Preview -->
+      <!-- KOLOM KANAN: Pesanan Aktif & Pratinjau Struk -->
       <aside class="col-right">
         <section class="card cart-card">
           <div class="section-head">
-            <h2>Current Order</h2>
-            <button type="button" id="clear-cart-btn" class="btn btn-ghost btn-sm">Clear</button>
+            <h2>Pesanan Aktif</h2>
+            <button type="button" id="clear-cart-btn" class="btn btn-ghost btn-sm">Kosongkan</button>
           </div>
 
-          <div id="cart-items" class="cart-items">
-            <p class="empty-state">Select services from the catalog to start an order.</p>
-          </div>
+          <div id="cart-items" class="cart-items"></div>
 
           <div class="note-box">
-            <label for="customer-note">Special Customer Requests / Notes</label>
+            <label for="customer-note">Permintaan / Catatan Khusus Pelanggan</label>
             <textarea
               id="customer-note"
               rows="2"
-              placeholder="Customer name, stylist preference, allergies, hair color formula..."
+              placeholder="Nama pelanggan, pilihan stylist, alergi, formula cat rambut..."
             ></textarea>
           </div>
 
           <div class="cart-totals">
             <div class="total-row">
-              <span>Items</span>
+              <span>Jumlah Item</span>
               <span id="cart-count" class="tabular">0</span>
             </div>
             <div class="total-row grand">
@@ -169,15 +168,15 @@
 
           <div class="checkout-actions">
             <button type="button" id="complete-order-btn" class="btn btn-primary btn-block" disabled>
-              Complete &amp; Print Receipt
+              Selesaikan &amp; Cetak Struk
             </button>
           </div>
         </section>
 
-        <!-- Live Thermal Receipt Preview -->
+        <!-- Pratinjau Struk -->
         <section class="card">
           <div class="section-head">
-            <h2>Receipt Preview</h2>
+            <h2>Pratinjau Struk</h2>
             <span class="muted-label">58mm / 80mm</span>
           </div>
           <div id="receipt-preview" class="receipt-sheet"></div>
@@ -186,7 +185,7 @@
     </main>
   </div>
 
-  <!-- Dedicated Print Container (Hidden on screen, visible only in @media print) -->
+  <!-- Area Cetak Khusus -->
   <div id="print-area" aria-hidden="true"></div>
 
   <script src="./app.js"></script>
