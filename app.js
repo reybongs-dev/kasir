@@ -1,36 +1,38 @@
 (() => {
   'use strict';
 
+  const APP_VERSION = '2026.11.19.3';
+
   const STORAGE_KEYS = {
     SERVICES: 'salon_cashier_services_v1',
     LEDGER: 'salon_cashier_ledger_v1',
-    CART: 'salon_cashier_cart_v1'
+    CART: 'salon_cashier_cart_v1',
+    THEME: 'salon_cashier_theme_v1'
   };
 
   const DEFAULT_SERVICES = [
-    { id: 'srv-1', name: 'Haircut', price: 50000 },
-    { id: 'srv-2', name: 'Hair Wash & Blow', price: 45000 },
-    { id: 'srv-3', name: 'Hair Coloring', price: 250000 },
+    { id: 'srv-1', name: 'Potong Rambut', price: 50000 },
+    { id: 'srv-2', name: 'Cuci & Blow', price: 45000 },
+    { id: 'srv-3', name: 'Cat Rambut', price: 250000 },
     { id: 'srv-4', name: 'Hair Spa', price: 120000 },
     { id: 'srv-5', name: 'Manicure', price: 65000 },
     { id: 'srv-6', name: 'Pedicure', price: 75000 }
   ];
 
-  // Single Source of Truth State
   const state = {
     services: loadJSON(STORAGE_KEYS.SERVICES, DEFAULT_SERVICES),
     ledger: loadJSON(STORAGE_KEYS.LEDGER, []),
     cart: loadJSON(STORAGE_KEYS.CART, []),
+    theme: localStorage.getItem(STORAGE_KEYS.THEME) || 'light',
     customerNote: '',
     filterType: 'all',
     filterPeriod: 'monthly'
   };
 
-  // DOM References
   const el = {
     offlineBadge: document.getElementById('offline-badge'),
     liveClock: document.getElementById('live-clock'),
-    // Summaries
+    toggleThemeBtn: document.getElementById('toggle-theme-btn'),
     sumTodayIn: document.getElementById('sum-today-in'),
     sumTodayOut: document.getElementById('sum-today-out'),
     sumTodayNet: document.getElementById('sum-today-net'),
@@ -40,7 +42,6 @@
     sumMonthIn: document.getElementById('sum-month-in'),
     sumMonthOut: document.getElementById('sum-month-out'),
     sumMonthNet: document.getElementById('sum-month-net'),
-    // Services
     toggleServiceFormBtn: document.getElementById('toggle-service-form-btn'),
     serviceForm: document.getElementById('service-form'),
     serviceEditId: document.getElementById('service-edit-id'),
@@ -48,16 +49,13 @@
     servicePrice: document.getElementById('service-price'),
     serviceCancelBtn: document.getElementById('service-cancel-btn'),
     serviceGrid: document.getElementById('service-grid'),
-    // Expense
     expenseForm: document.getElementById('expense-form'),
     expenseDesc: document.getElementById('expense-desc'),
     expenseAmount: document.getElementById('expense-amount'),
     expenseDate: document.getElementById('expense-date'),
-    // Ledger
     filterType: document.getElementById('filter-type'),
     filterPeriod: document.getElementById('filter-period'),
     ledgerBody: document.getElementById('ledger-body'),
-    // Cart & Receipt
     clearCartBtn: document.getElementById('clear-cart-btn'),
     cartItems: document.getElementById('cart-items'),
     customerNote: document.getElementById('customer-note'),
@@ -68,7 +66,6 @@
     printArea: document.getElementById('print-area')
   };
 
-  // Utilities
   function loadJSON(key, fallback) {
     try {
       const raw = localStorage.getItem(key);
@@ -82,6 +79,7 @@
     localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(state.services));
     localStorage.setItem(STORAGE_KEYS.LEDGER, JSON.stringify(state.ledger));
     localStorage.setItem(STORAGE_KEYS.CART, JSON.stringify(state.cart));
+    localStorage.setItem(STORAGE_KEYS.THEME, state.theme);
   }
 
   function formatCurrency(amount) {
@@ -94,7 +92,7 @@
 
   function formatDateTime(isoString) {
     const d = new Date(isoString);
-    return d.toLocaleString('en-GB', {
+    return d.toLocaleString('id-ID', {
       day: '2-digit',
       month: 'short',
       year: 'numeric',
@@ -122,16 +120,13 @@
     return new Date(now - offset).toISOString().slice(0, 10);
   }
 
-  // Date Period Helpers
   function isWithinPeriod(isoString, period) {
     if (period === 'all') return true;
     const txDate = new Date(isoString);
     const now = new Date();
-
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    if (period === 'daily') {
-      return txDate >= startOfToday;
-    }
+
+    if (period === 'daily') return txDate >= startOfToday;
     if (period === 'weekly') {
       const sevenDaysAgo = new Date(startOfToday);
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
@@ -144,13 +139,17 @@
     return true;
   }
 
-  // Service Catalog Actions
+  function applyTheme() {
+    const isDark = state.theme === 'dark';
+    document.body.classList.toggle('theme-dark', isDark);
+    el.toggleThemeBtn.textContent = isDark ? 'Terang' : 'Gelap';
+  }
+
   function upsertService(e) {
     e.preventDefault();
     const name = el.serviceName.value.trim();
     const price = Number(el.servicePrice.value);
     const editId = el.serviceEditId.value;
-
     if (!name || price < 0) return;
 
     if (editId) {
@@ -159,18 +158,13 @@
         target.name = name;
         target.price = price;
       }
-      // Sync updated price in active cart if present
       const cartItem = state.cart.find((c) => c.serviceId === editId);
       if (cartItem) {
         cartItem.name = name;
         cartItem.price = price;
       }
     } else {
-      state.services.push({
-        id: `srv-${Date.now()}`,
-        name,
-        price
-      });
+      state.services.push({ id: `srv-${Date.now()}`, name, price });
     }
 
     resetServiceForm();
@@ -201,33 +195,20 @@
     el.serviceCancelBtn.classList.add('hidden');
   }
 
-  // Cart Actions
   function addToCart(serviceId) {
     const srv = state.services.find((s) => s.id === serviceId);
     if (!srv) return;
-
     const existing = state.cart.find((item) => item.serviceId === serviceId);
-    if (existing) {
-      existing.qty += 1;
-    } else {
-      state.cart.push({
-        serviceId: srv.id,
-        name: srv.name,
-        price: srv.price,
-        qty: 1
-      });
-    }
+    if (existing) existing.qty += 1;
+    else state.cart.push({ serviceId: srv.id, name: srv.name, price: srv.price, qty: 1 });
     commitAndRender();
   }
 
   function updateCartQty(serviceId, delta) {
     const idx = state.cart.findIndex((item) => item.serviceId === serviceId);
     if (idx === -1) return;
-
     state.cart[idx].qty += delta;
-    if (state.cart[idx].qty <= 0) {
-      state.cart.splice(idx, 1);
-    }
+    if (state.cart[idx].qty <= 0) state.cart.splice(idx, 1);
     commitAndRender();
   }
 
@@ -238,10 +219,8 @@
     commitAndRender();
   }
 
-  // Checkout & Expense Logging
   function completeOrder() {
     if (state.cart.length === 0) return;
-
     const total = state.cart.reduce((sum, item) => sum + item.price * item.qty, 0);
     const nowIso = new Date().toISOString();
     const orderRecord = {
@@ -268,7 +247,6 @@
     const desc = el.expenseDesc.value.trim();
     const amount = Number(el.expenseAmount.value);
     const dateVal = el.expenseDate.value;
-
     if (!desc || amount <= 0 || !dateVal) return;
 
     const nowTime = new Date().toTimeString().slice(0, 8);
@@ -283,17 +261,13 @@
       amount
     });
 
-    // Keep ledger sorted newest first
     state.ledger.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
     el.expenseDesc.value = '';
     el.expenseAmount.value = '';
     el.expenseDate.value = todayInputDate();
-
     commitAndRender();
   }
 
-  // Receipt Generation & Printing
   function buildReceiptHTML(order) {
     const itemsHTML = order.items
       .map(
@@ -306,28 +280,28 @@
       .join('');
 
     const noteHTML = order.note
-      ? `<div class="rcp-note"><strong>Note:</strong> ${escapeHTML(order.note)}</div>`
+      ? `<div class="rcp-note"><strong>Catatan:</strong> ${escapeHTML(order.note)}</div>`
       : '';
 
     return `
       <div class="receipt-sheet">
         <div class="rcp-center">
           <h3 class="rcp-title">Salon Cashier</h3>
-          <div>Official Service Receipt</div>
+          <div>Struk Layanan Resmi</div>
         </div>
         <hr class="rcp-divider" />
-        <div class="rcp-row"><span>Order ID</span><span>${escapeHTML(order.id)}</span></div>
-        <div class="rcp-row"><span>Date</span><span>${escapeHTML(order.formattedDate)}</span></div>
+        <div class="rcp-row"><span>ID Order</span><span>${escapeHTML(order.id)}</span></div>
+        <div class="rcp-row"><span>Tanggal</span><span>${escapeHTML(formatDateTime(order.timestamp))}</span></div>
         <hr class="rcp-divider" />
         ${itemsHTML}
         ${noteHTML}
         <hr class="rcp-divider" />
         <div class="rcp-row rcp-total">
-          <span>TOTAL PAID</span>
+          <span>TOTAL BAYAR</span>
           <span class="tabular">${formatCurrency(order.amount)}</span>
         </div>
         <hr class="rcp-divider" />
-        <div class="rcp-center">Thank you for your visit!</div>
+        <div class="rcp-center">Terima kasih atas kunjungan Anda!</div>
       </div>
     `;
   }
@@ -337,7 +311,6 @@
     window.print();
   }
 
-  // Rendering Functions
   function renderServices() {
     el.serviceGrid.innerHTML = state.services
       .map(
@@ -346,11 +319,11 @@
           <div class="service-tile-top">
             <span class="service-title">${escapeHTML(srv.name)}</span>
           </div>
-          <div class="service-row-bottom" style="display:flex;justify-content:space-between;align-items:center;">
+          <div class="service-row-bottom">
             <span class="service-price tabular">${formatCurrency(srv.price)}</span>
             <div class="service-controls">
-              <button type="button" class="icon-btn" data-action="edit" data-id="${srv.id}" title="Edit">Edit</button>
-              <button type="button" class="icon-btn" data-action="delete" data-id="${srv.id}" title="Delete">&times;</button>
+              <button type="button" class="icon-btn" data-action="edit" data-id="${srv.id}">Edit</button>
+              <button type="button" class="icon-btn" data-action="delete" data-id="${srv.id}">&times;</button>
             </div>
           </div>
         </div>`
@@ -367,7 +340,7 @@
     el.completeOrderBtn.disabled = state.cart.length === 0;
 
     if (state.cart.length === 0) {
-      el.cartItems.innerHTML = `<p class="empty-state">Select services from the catalog to start an order.</p>`;
+      el.cartItems.innerHTML = `<p class="empty-state">Pilih layanan di katalog untuk memulai pesanan.</p>`;
     } else {
       el.cartItems.innerHTML = state.cart
         .map(
@@ -375,25 +348,23 @@
           <div class="cart-row">
             <div class="cart-row-info">
               <span class="cart-row-name">${escapeHTML(item.name)}</span>
-              <span class="cart-row-sub tabular">${formatCurrency(item.price)} each</span>
+              <span class="cart-row-sub tabular">${formatCurrency(item.price)} satuan</span>
             </div>
             <div class="qty-controls">
               <button type="button" class="qty-btn" data-cart-action="dec" data-id="${item.serviceId}">-</button>
               <span class="qty-val tabular">${item.qty}</span>
               <button type="button" class="qty-btn" data-cart-action="inc" data-id="${item.serviceId}">+</button>
-              <button type="button" class="qty-btn" data-cart-action="rem" data-id="${item.serviceId}" title="Remove">&times;</button>
+              <button type="button" class="qty-btn" data-cart-action="rem" data-id="${item.serviceId}">&times;</button>
             </div>
           </div>`
         )
         .join('');
     }
 
-    // Live Preview Object
-    const nowIso = new Date().toISOString();
     const previewOrder = {
       id: 'PREVIEW',
-      formattedDate: formatDateTime(nowIso),
-      items: state.cart.length ? state.cart : [{ name: 'Sample Service', qty: 1, price: 0 }],
+      timestamp: new Date().toISOString(),
+      items: state.cart.length ? state.cart : [{ name: 'Contoh Layanan', qty: 1, price: 0 }],
       note: state.customerNote.trim(),
       amount: totalAmount
     };
@@ -436,7 +407,7 @@
     });
 
     if (filtered.length === 0) {
-      el.ledgerBody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:18px;">No transactions found for this filter.</td></tr>`;
+      el.ledgerBody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:18px;">Belum ada transaksi untuk filter ini.</td></tr>`;
       return;
     }
 
@@ -446,18 +417,21 @@
         const summaryText = isIncoming
           ? tx.items.map((i) => `${i.name} (x${i.qty})`).join(', ')
           : tx.description;
-        const noteSub = isIncoming && tx.note ? `<span class="ledger-note">Note: ${escapeHTML(tx.note)}</span>` : '';
+        const noteSub =
+          isIncoming && tx.note
+            ? `<span class="ledger-note">Catatan: ${escapeHTML(tx.note)}</span>`
+            : '';
 
         return `
           <tr>
-            <td class="tabular">${escapeHTML(tx.formattedDate)}<span class="ledger-note">${escapeHTML(tx.id)}</span></td>
+            <td class="tabular">${escapeHTML(formatDateTime(tx.timestamp))}<span class="ledger-note">${escapeHTML(tx.id)}</span></td>
             <td>${escapeHTML(summaryText)}${noteSub}</td>
-            <td><span class="pill ${isIncoming ? 'pill-in' : 'pill-out'}">${isIncoming ? 'Incoming' : 'Outgoing'}</span></td>
+            <td><span class="pill ${isIncoming ? 'pill-in' : 'pill-out'}">${isIncoming ? 'Masuk' : 'Keluar'}</span></td>
             <td class="num tabular ${isIncoming ? 'text-in' : 'text-out'}">${isIncoming ? '+' : '-'}${formatCurrency(tx.amount)}</td>
             <td class="num">
               ${
                 isIncoming
-                  ? `<button type="button" class="btn btn-ghost btn-sm" data-reprint-id="${tx.id}">Reprint</button>`
+                  ? `<button type="button" class="btn btn-ghost btn-sm" data-reprint-id="${tx.id}">Cetak Ulang</button>`
                   : `<span class="muted-label">—</span>`
               }
             </td>
@@ -468,14 +442,19 @@
 
   function commitAndRender() {
     saveState();
+    applyTheme();
     renderServices();
     renderCartAndPreview();
     renderSummaries();
     renderLedger();
   }
 
-  // Event Listeners
   function bindEvents() {
+    el.toggleThemeBtn.addEventListener('click', () => {
+      state.theme = state.theme === 'dark' ? 'light' : 'dark';
+      commitAndRender();
+    });
+
     el.toggleServiceFormBtn.addEventListener('click', () => {
       el.serviceForm.classList.toggle('hidden');
       if (!el.serviceForm.classList.contains('hidden')) el.serviceName.focus();
@@ -534,10 +513,9 @@
       if (order) printReceipt(order);
     });
 
-    // Online / Offline Status & Live Clock
     const updateNetworkStatus = () => {
       const online = navigator.onLine;
-      el.offlineBadge.textContent = online ? 'Online' : 'Offline Ready';
+      el.offlineBadge.textContent = online ? 'Online' : 'Mode Offline';
       el.offlineBadge.className = `badge ${online ? 'badge-online' : 'badge-offline'}`;
     };
     window.addEventListener('online', updateNetworkStatus);
@@ -545,7 +523,7 @@
     updateNetworkStatus();
 
     const updateClock = () => {
-      el.liveClock.textContent = new Date().toLocaleTimeString([], {
+      el.liveClock.textContent = new Date().toLocaleTimeString('id-ID', {
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit'
@@ -554,9 +532,6 @@
     updateClock();
     setInterval(updateClock, 1000);
   }
-
-    // Register Service Worker for Offline PWA with Auto-Update
-  const APP_VERSION = '2026.11.19.1';
 
   function registerServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
@@ -586,7 +561,6 @@
     });
   }
 
-  // Initialize App
   el.expenseDate.value = todayInputDate();
   bindEvents();
   commitAndRender();
