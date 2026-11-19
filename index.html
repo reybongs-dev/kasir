@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#111827" />
+  <title>Salon Cashier — Offline POS</title>
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Top Header -->
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-dot"></span>
+        <h1>Salon Cashier</h1>
+      </div>
+      <div class="topbar-meta">
+        <span id="offline-badge" class="badge badge-online">Online</span>
+        <span id="live-clock" class="tabular"></span>
+      </div>
+    </header>
+
+    <!-- Financial Summary Cards -->
+    <section class="summary-grid" aria-label="Financial Summary">
+      <article class="card summary-card">
+        <div class="summary-header">
+          <h2>Today</h2>
+          <span class="summary-sub">Daily Cash Flow</span>
+        </div>
+        <div class="summary-metrics">
+          <div><span>In</span><strong id="sum-today-in" class="tabular text-in">Rp 0</strong></div>
+          <div><span>Out</span><strong id="sum-today-out" class="tabular text-out">Rp 0</strong></div>
+          <div><span>Net</span><strong id="sum-today-net" class="tabular">Rp 0</strong></div>
+        </div>
+      </article>
+
+      <article class="card summary-card">
+        <div class="summary-header">
+          <h2>Last 7 Days</h2>
+          <span class="summary-sub">Weekly Cash Flow</span>
+        </div>
+        <div class="summary-metrics">
+          <div><span>In</span><strong id="sum-week-in" class="tabular text-in">Rp 0</strong></div>
+          <div><span>Out</span><strong id="sum-week-out" class="tabular text-out">Rp 0</strong></div>
+          <div><span>Net</span><strong id="sum-week-net" class="tabular">Rp 0</strong></div>
+        </div>
+      </article>
+
+      <article class="card summary-card">
+        <div class="summary-header">
+          <h2>This Month</h2>
+          <span class="summary-sub">Monthly Cash Flow</span>
+        </div>
+        <div class="summary-metrics">
+          <div><span>In</span><strong id="sum-month-in" class="tabular text-in">Rp 0</strong></div>
+          <div><span>Out</span><strong id="sum-month-out" class="tabular text-out">Rp 0</strong></div>
+          <div><span>Net</span><strong id="sum-month-net" class="tabular">Rp 0</strong></div>
+        </div>
+      </article>
+    </section>
+
+    <!-- Main 2-Column Workspace -->
+    <main class="workspace">
+      <!-- LEFT COLUMN: Services, Expense Entry & Ledger -->
+      <div class="col-left">
+        <!-- Service Catalog -->
+        <section class="card">
+          <div class="section-head">
+            <h2>Service Catalog</h2>
+            <button type="button" id="toggle-service-form-btn" class="btn btn-ghost btn-sm">+ Manage / Add</button>
+          </div>
+
+          <form id="service-form" class="inline-form hidden" autocomplete="off">
+            <input type="hidden" id="service-edit-id" />
+            <input type="text" id="service-name" placeholder="Service name (e.g., Keratin)" required />
+            <input type="number" id="service-price" placeholder="Price" min="0" step="500" required />
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary btn-sm" id="service-submit-btn">Save Service</button>
+              <button type="button" id="service-cancel-btn" class="btn btn-ghost btn-sm hidden">Cancel</button>
+            </div>
+          </form>
+
+          <div id="service-grid" class="service-grid"></div>
+        </section>
+
+        <!-- Outgoing Cash Flow (Expense Entry) -->
+        <section class="card">
+          <div class="section-head">
+            <h2>Record Outgoing Expense</h2>
+            <span class="muted-label">Cash Outflow</span>
+          </div>
+          <form id="expense-form" class="expense-form" autocomplete="off">
+            <input type="text" id="expense-desc" placeholder="Description (e.g., Shampoo restock, Electricity)" required />
+            <input type="number" id="expense-amount" placeholder="Amount" min="1" step="500" required />
+            <input type="date" id="expense-date" required />
+            <button type="submit" class="btn btn-secondary">Record Expense</button>
+          </form>
+        </section>
+
+        <!-- Transaction Ledger -->
+        <section class="card">
+          <div class="section-head ledger-head">
+            <h2>Transaction Ledger</h2>
+            <div class="filters">
+              <select id="filter-type" aria-label="Filter by transaction type">
+                <option value="all">All Types</option>
+                <option value="in">Incoming (Orders)</option>
+                <option value="out">Outgoing (Expenses)</option>
+              </select>
+              <select id="filter-period" aria-label="Filter by period">
+                <option value="daily">Today</option>
+                <option value="weekly">Last 7 Days</option>
+                <option value="monthly" selected>This Month</option>
+                <option value="all">All Time</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="ledger-table">
+              <thead>
+                <tr>
+                  <th>Date &amp; Time</th>
+                  <th>Details / Note</th>
+                  <th>Type</th>
+                  <th class="num">Amount</th>
+                  <th class="num">Receipt</th>
+                </tr>
+              </thead>
+              <tbody id="ledger-body"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <!-- RIGHT COLUMN: Active Cart & Receipt Preview -->
+      <aside class="col-right">
+        <section class="card cart-card">
+          <div class="section-head">
+            <h2>Current Order</h2>
+            <button type="button" id="clear-cart-btn" class="btn btn-ghost btn-sm">Clear</button>
+          </div>
+
+          <div id="cart-items" class="cart-items">
+            <p class="empty-state">Select services from the catalog to start an order.</p>
+          </div>
+
+          <div class="note-box">
+            <label for="customer-note">Special Customer Requests / Notes</label>
+            <textarea
+              id="customer-note"
+              rows="2"
+              placeholder="Customer name, stylist preference, allergies, hair color formula..."
+            ></textarea>
+          </div>
+
+          <div class="cart-totals">
+            <div class="total-row">
+              <span>Items</span>
+              <span id="cart-count" class="tabular">0</span>
+            </div>
+            <div class="total-row grand">
+              <span>Total</span>
+              <strong id="cart-total" class="tabular">Rp 0</strong>
+            </div>
+          </div>
+
+          <div class="checkout-actions">
+            <button type="button" id="complete-order-btn" class="btn btn-primary btn-block" disabled>
+              Complete &amp; Print Receipt
+            </button>
+          </div>
+        </section>
+
+        <!-- Live Thermal Receipt Preview -->
+        <section class="card">
+          <div class="section-head">
+            <h2>Receipt Preview</h2>
+            <span class="muted-label">58mm / 80mm</span>
+          </div>
+          <div id="receipt-preview" class="receipt-sheet"></div>
+        </section>
+      </aside>
+    </main>
+  </div>
+
+  <!-- Dedicated Print Container (Hidden on screen, visible only in @media print) -->
+  <div id="print-area" aria-hidden="true"></div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
