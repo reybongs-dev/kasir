@@ -555,15 +555,35 @@
     setInterval(updateClock, 1000);
   }
 
-  // Register Service Worker for Offline PWA
+    // Register Service Worker for Offline PWA with Auto-Update
+  const APP_VERSION = '2026.11.19.1';
+
   function registerServiceWorker() {
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').catch((err) => {
-          console.warn('Service Worker registration failed:', err);
+    if (!('serviceWorker' in navigator)) return;
+
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (refreshing) return;
+      refreshing = true;
+      window.location.reload();
+    });
+
+    window.addEventListener('load', async () => {
+      try {
+        const reg = await navigator.serviceWorker.register(`./sw.js?v=${APP_VERSION}`, {
+          updateViaCache: 'none'
         });
-      });
-    }
+        reg.update();
+
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') {
+            reg.update();
+          }
+        });
+      } catch (err) {
+        console.warn('Registrasi Service Worker gagal:', err);
+      }
+    });
   }
 
   // Initialize App
