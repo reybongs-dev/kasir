@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#111827" />
   <title>Salon Cashier — Kasir Offline</title>
-  <link rel="manifest" href="./manifest.json?v=2026.11.19.3" />
+  <link rel="manifest" href="./manifest.json?v=2026.11.19.4" />
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
@@ -68,9 +68,28 @@
       <div class="col-left">
         <!-- Katalog Layanan -->
         <section class="card">
-          <div class="section-head">
+          <div class="section-head catalog-head">
             <h2>Katalog Layanan</h2>
-            <button type="button" id="toggle-service-form-btn" class="btn btn-ghost btn-sm">+ Kelola / Tambah</button>
+            <div class="catalog-actions">
+              <button type="button" id="toggle-multi-btn" class="btn btn-secondary btn-sm">Pilih Banyak</button>
+              <button type="button" id="toggle-service-form-btn" class="btn btn-ghost btn-sm">+ Kelola / Tambah</button>
+            </div>
+          </div>
+
+          <!-- Baris Paket Cepat Sekali Klik -->
+          <div id="quick-combos" class="quick-combos">
+            <button type="button" class="combo-chip" data-combo="hair-basic">+ Potong &amp; Cuci Blow</button>
+            <button type="button" class="combo-chip" data-combo="spa-relax">+ Hair Spa &amp; Cuci Blow</button>
+            <button type="button" class="combo-chip" data-combo="nails-duo">+ Manicure &amp; Pedicure</button>
+          </div>
+
+          <!-- Bar Aksi Saat Mode Pilih Banyak Aktif -->
+          <div id="multi-bar" class="multi-bar hidden">
+            <span id="multi-selected-count" class="multi-info tabular">0 layanan dipilih</span>
+            <div class="multi-bar-btns">
+              <button type="button" id="apply-multi-btn" class="btn btn-primary btn-sm" disabled>Masukkan Sekaligus</button>
+              <button type="button" id="cancel-multi-btn" class="btn btn-ghost btn-sm">Batal</button>
+            </div>
           </div>
 
           <form id="service-form" class="inline-form hidden" autocomplete="off">
@@ -190,4 +209,5 @@
 
   <script src="./app.js"></script>
 </body>
-</html>
+  </html>
+  
