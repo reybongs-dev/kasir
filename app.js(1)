@@ -1,8 +1,6 @@
 (() => {
   'use strict';
 
-  const APP_VERSION = '2026.11.19.4';
-
   const STORAGE_KEYS = {
     SERVICES: 'salon_cashier_services_v1',
     LEDGER: 'salon_cashier_ledger_v1',
@@ -29,18 +27,37 @@
     services: loadJSON(STORAGE_KEYS.SERVICES, DEFAULT_SERVICES),
     ledger: loadJSON(STORAGE_KEYS.LEDGER, []),
     cart: loadJSON(STORAGE_KEYS.CART, []),
-    theme: localStorage.getItem(STORAGE_KEYS.THEME) || 'light',
+    theme: (() => {
+      try {
+        return localStorage.getItem(STORAGE_KEYS.THEME) || 'light';
+      } catch {
+        return 'light';
+      }
+    })(),
     multiMode: false,
-    selectedMap: {}, // { [serviceId]: qty }
+    selectedMap: {},
     customerNote: '',
     filterType: 'all',
-    filterPeriod: 'monthly'
+    filterPeriod: 'monthly',
+    filterMonth: '',
+    pendingDeleteServiceId: null,
+    pendingDeleteTxId: null,
+    activeDetailOrderId: null,
+    currentView: 'pos'
   };
 
   const el = {
     offlineBadge: document.getElementById('offline-badge'),
     liveClock: document.getElementById('live-clock'),
+    navLookupBtn: document.getElementById('nav-lookup-btn'),
     toggleThemeBtn: document.getElementById('toggle-theme-btn'),
+    posView: document.getElementById('pos-view'),
+    lookupView: document.getElementById('lookup-view'),
+    backToPosBtn: document.getElementById('back-to-pos-btn'),
+    lookupForm: document.getElementById('lookup-form'),
+    lookupInput: document.getElementById('lookup-input'),
+    lookupRecentChips: document.getElementById('lookup-recent-chips'),
+    lookupResult: document.getElementById('lookup-result'),
     sumTodayIn: document.getElementById('sum-today-in'),
     sumTodayOut: document.getElementById('sum-today-out'),
     sumTodayNet: document.getElementById('sum-today-net'),
@@ -69,6 +86,9 @@
     expenseDate: document.getElementById('expense-date'),
     filterType: document.getElementById('filter-type'),
     filterPeriod: document.getElementById('filter-period'),
+    filterMonth: document.getElementById('filter-month'),
+    summaryMonthSelect: document.getElementById('summary-month-select'),
+    sumMonthTitle: document.getElementById('sum-month-title'),
     ledgerBody: document.getElementById('ledger-body'),
     clearCartBtn: document.getElementById('clear-cart-btn'),
     cartItems: document.getElementById('cart-items'),
@@ -77,23 +97,55 @@
     cartTotal: document.getElementById('cart-total'),
     completeOrderBtn: document.getElementById('complete-order-btn'),
     receiptPreview: document.getElementById('receipt-preview'),
-    printArea: document.getElementById('print-area')
+    printArea: document.getElementById('print-area'),
+    deleteModal: document.getElementById('delete-modal'),
+    deleteModalDesc: document.getElementById('delete-modal-desc'),
+    cancelDeleteBtn: document.getElementById('cancel-delete-btn'),
+    confirmDeleteBtn: document.getElementById('confirm-delete-btn'),
+    orderDetailModal: document.getElementById('order-detail-modal'),
+    orderDetailBody: document.getElementById('order-detail-body'),
+    closeDetailBtn: document.getElementById('close-detail-btn'),
+    detailToLookupBtn: document.getElementById('detail-to-lookup-btn'),
+    detailPrintBtn: document.getElementById('detail-print-btn'),
+    exportBackupBtn: document.getElementById('export-backup-btn'),
+    importBackupBtn: document.getElementById('import-backup-btn'),
+    importBackupFile: document.getElementById('import-backup-file')
   };
+
+  function deepClone(obj) {
+    if (typeof window !== 'undefined' && typeof window.structuredClone === 'function') {
+      try {
+        return window.structuredClone(obj);
+      } catch {
+        // fallback di bawah
+      }
+    }
+    return JSON.parse(JSON.stringify(obj));
+  }
 
   function loadJSON(key, fallback) {
     try {
       const raw = localStorage.getItem(key);
-      return raw ? JSON.parse(raw) : structuredClone(fallback);
+      if (!raw) return deepClone(fallback);
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(fallback) && !Array.isArray(parsed)) {
+        return deepClone(fallback);
+      }
+      return parsed ?? deepClone(fallback);
     } catch {
-      return structuredClone(fallback);
+      return deepClone(fallback);
     }
   }
 
   function saveState() {
-    localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(state.services));
-    localStorage.setItem(STORAGE_KEYS.LEDGER, JSON.stringify(state.ledger));
-    localStorage.setItem(STORAGE_KEYS.CART, JSON.stringify(state.cart));
-    localStorage.setItem(STORAGE_KEYS.THEME, state.theme);
+    try {
+      localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(state.services));
+      localStorage.setItem(STORAGE_KEYS.LEDGER, JSON.stringify(state.ledger));
+      localStorage.setItem(STORAGE_KEYS.CART, JSON.stringify(state.cart));
+      localStorage.setItem(STORAGE_KEYS.THEME, state.theme);
+    } catch {
+      // Abaikan jika penyimpanan lokal penuh atau dibatasi browser
+    }
   }
 
   function formatCurrency(amount) {
@@ -117,9 +169,10 @@
 
   function generateOrderId() {
     const now = new Date();
-    const ymd = now.toISOString().slice(2, 10).replace(/-/g, '');
-    const rand = Math.floor(100 + Math.random() * 900);
-    return `SC-${ymd}-${rand}`;
+    const offset = now.getTimezoneOffset() * 60000;
+    const ymd = new Date(now - offset).toISOString().slice(2, 10).replace(/-/g, '');
+    const rand = Math.floor(1000 + Math.random() * 9000);
+    return `MFD-${ymd}-${rand}`;
   }
 
   function escapeHTML(str) {
@@ -132,6 +185,54 @@
     const now = new Date();
     const offset = now.getTimezoneOffset() * 60000;
     return new Date(now - offset).toISOString().slice(0, 10);
+  }
+
+  function getMonthKey(isoString) {
+    const d = new Date(isoString);
+    if (Number.isNaN(d.getTime())) return '';
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+  }
+
+  function formatMonthLabel(monthKey) {
+    const [yStr, mStr] = monthKey.split('-');
+    const year = Number(yStr);
+    const monthIdx = Number(mStr) - 1;
+    if (!year || monthIdx < 0 || monthIdx > 11) return monthKey;
+    return new Date(year, monthIdx, 1).toLocaleDateString('id-ID', {
+      month: 'long',
+      year: 'numeric'
+    });
+  }
+
+  function renderMonthOptions() {
+    const now = new Date();
+    const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const keysSet = new Set([currentKey]);
+
+    for (const tx of state.ledger) {
+      const k = getMonthKey(tx.timestamp);
+      if (k) keysSet.add(k);
+    }
+
+    const sortedKeys = Array.from(keysSet).sort((a, b) => b.localeCompare(a));
+    const optionsHTML = [
+      `<option value="">Pilih Bulan...</option>`,
+      ...sortedKeys.map(
+        (k) => `<option value="${escapeHTML(k)}" ${state.filterMonth === k ? 'selected' : ''}>${escapeHTML(formatMonthLabel(k))}</option>`
+      )
+    ];
+    el.filterMonth.innerHTML = optionsHTML.join('');
+
+    const summaryOptionsHTML = [
+      `<option value="">Bulan Ini</option>`,
+      ...sortedKeys.map(
+        (k) => `<option value="${escapeHTML(k)}" ${state.filterMonth === k ? 'selected' : ''}>${escapeHTML(formatMonthLabel(k))}</option>`
+      )
+    ];
+    el.summaryMonthSelect.innerHTML = summaryOptionsHTML.join('');
+    el.sumMonthTitle.textContent = state.filterMonth ? formatMonthLabel(state.filterMonth) : 'Bulan Ini';
   }
 
   function isWithinPeriod(isoString, period) {
@@ -159,12 +260,130 @@
     el.toggleThemeBtn.textContent = isDark ? 'Terang' : 'Gelap';
   }
 
+  function switchView(viewName, prefillOrderId = '') {
+    state.currentView = viewName;
+    const isLookup = viewName === 'lookup';
+    el.posView.classList.toggle('hidden', isLookup);
+    el.lookupView.classList.toggle('hidden', !isLookup);
+    el.navLookupBtn.classList.toggle('btn-primary', isLookup);
+    el.navLookupBtn.classList.toggle('btn-secondary', !isLookup);
+
+    if (isLookup) {
+      renderLookupRecentChips();
+      if (prefillOrderId) {
+        el.lookupInput.value = prefillOrderId;
+        renderLookupResult(prefillOrderId);
+      } else if (el.lookupInput.value.trim()) {
+        renderLookupResult(el.lookupInput.value.trim());
+      } else {
+        const latestOrder = state.ledger.find((tx) => tx.type === 'in');
+        if (latestOrder) {
+          el.lookupInput.value = latestOrder.id;
+          renderLookupResult(latestOrder.id);
+        } else {
+          el.lookupResult.innerHTML = `<p class="empty-state">Belum ada riwayat order yang tersimpan.</p>`;
+        }
+      }
+    }
+  }
+
+  function renderLookupRecentChips() {
+    const recentOrders = state.ledger.filter((tx) => tx.type === 'in').slice(0, 6);
+    if (recentOrders.length === 0) {
+      el.lookupRecentChips.innerHTML = '';
+      return;
+    }
+    el.lookupRecentChips.innerHTML = recentOrders
+      .map(
+        (ord) =>
+          `<button type="button" class="combo-chip tabular" data-lookup-chip="${escapeHTML(ord.id)}">${escapeHTML(ord.id)}</button>`
+      )
+      .join('');
+  }
+
+  function buildOrderDetailHTML(order) {
+    const itemsListHTML = order.items
+      .map(
+        (item) => `
+        <div class="detail-line">
+          <span>${escapeHTML(item.name)} (x${item.qty})</span>
+          <span class="tabular">${formatCurrency(item.price * item.qty)}</span>
+        </div>`
+      )
+      .join('');
+
+    const noteBlockHTML = order.note
+      ? `<div class="rcp-note" style="background: var(--surface); border-color: var(--border); color: var(--text);"><strong>Catatan Pelanggan:</strong> ${escapeHTML(order.note)}</div>`
+      : `<div class="muted-label">Tidak ada catatan khusus pelanggan.</div>`;
+
+    return `
+      <div class="detail-box">
+        <div class="detail-line">
+          <span class="muted-label">ID Order</span>
+          <strong class="tabular">${escapeHTML(order.id)}</strong>
+        </div>
+        <div class="detail-line">
+          <span class="muted-label">Waktu Transaksi</span>
+          <span class="tabular">${escapeHTML(formatDateTime(order.timestamp))}</span>
+        </div>
+        <div class="detail-items">
+          ${itemsListHTML}
+        </div>
+        ${noteBlockHTML}
+        <div class="detail-line" style="font-size: 15px; padding-top: 4px;">
+          <strong>Total Pembayaran</strong>
+          <strong class="tabular text-in">${formatCurrency(order.amount)}</strong>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderLookupResult(rawQuery) {
+    const query = rawQuery.trim().toLowerCase();
+    if (!query) {
+      el.lookupResult.innerHTML = `<p class="empty-state">Ketik ID Order terlebih dahulu untuk mencari transaksi.</p>`;
+      return;
+    }
+
+    const order = state.ledger.find(
+      (tx) => tx.type === 'in' && tx.id.toLowerCase() === query
+    ) || state.ledger.find(
+      (tx) => tx.type === 'in' && tx.id.toLowerCase().includes(query)
+    );
+
+    if (!order) {
+      el.lookupResult.innerHTML = `<p class="empty-state">Transaksi dengan ID Order "<strong>${escapeHTML(rawQuery)}</strong>" tidak ditemukan.</p>`;
+      return;
+    }
+
+    el.lookupResult.innerHTML = `
+      ${buildOrderDetailHTML(order)}
+      <div style="display:flex; justify-content:flex-end; margin-top:12px;">
+        <button type="button" class="btn btn-primary btn-sm" data-reprint-id="${escapeHTML(order.id)}">Cetak Ulang Struk</button>
+      </div>
+    `;
+  }
+
+  function openOrderDetailModal(orderId) {
+    const order = state.ledger.find((tx) => tx.type === 'in' && tx.id === orderId);
+    if (!order) return;
+
+    state.activeDetailOrderId = order.id;
+    el.orderDetailBody.innerHTML = buildOrderDetailHTML(order);
+    el.orderDetailModal.classList.remove('hidden');
+  }
+
+  function closeOrderDetailModal() {
+    state.activeDetailOrderId = null;
+    el.orderDetailModal.classList.add('hidden');
+  }
+
   function upsertService(e) {
     e.preventDefault();
     const name = el.serviceName.value.trim();
-    const price = Number(el.servicePrice.value);
+    const price = Math.round(Number(el.servicePrice.value));
     const editId = el.serviceEditId.value;
-    if (!name || price < 0) return;
+    if (!name || Number.isNaN(price) || price < 0) return;
 
     if (editId) {
       const target = state.services.find((s) => s.id === editId);
@@ -196,11 +415,119 @@
     el.serviceName.focus();
   }
 
-  function deleteService(id) {
-    state.services = state.services.filter((s) => s.id !== id);
-    delete state.selectedMap[id];
-    if (el.serviceEditId.value === id) resetServiceForm();
-    commitAndRender();
+  function requestDeleteService(id) {
+    const srv = state.services.find((s) => s.id === id);
+    if (!srv) return;
+    state.pendingDeleteServiceId = id;
+    state.pendingDeleteTxId = null;
+    document.getElementById('delete-modal-title').textContent = 'Konfirmasi Hapus Layanan';
+    el.deleteModalDesc.innerHTML = `Yakin ingin menghapus layanan <strong>${escapeHTML(srv.name)}</strong> (${formatCurrency(srv.price)}) dari katalog?`;
+    el.deleteModal.classList.remove('hidden');
+  }
+
+  function requestDeleteTx(txId) {
+    const tx = state.ledger.find((t) => t.id === txId);
+    if (!tx) return;
+    state.pendingDeleteTxId = txId;
+    state.pendingDeleteServiceId = null;
+    document.getElementById('delete-modal-title').textContent = 'Konfirmasi Hapus Transaksi';
+    const label = tx.type === 'in' ? `Order ${tx.id}` : tx.description;
+    el.deleteModalDesc.innerHTML = `Yakin ingin menghapus catatan <strong>${escapeHTML(label)}</strong> (${formatCurrency(tx.amount)}) dari Buku Kas?`;
+    el.deleteModal.classList.remove('hidden');
+  }
+
+  function cancelDeleteService() {
+    state.pendingDeleteServiceId = null;
+    state.pendingDeleteTxId = null;
+    el.deleteModal.classList.add('hidden');
+  }
+
+  function confirmDeleteService() {
+    if (state.pendingDeleteServiceId) {
+      const id = state.pendingDeleteServiceId;
+      state.services = state.services.filter((s) => s.id !== id);
+      delete state.selectedMap[id];
+      if (el.serviceEditId.value === id) resetServiceForm();
+      cancelDeleteService();
+      commitAndRender();
+      return;
+    }
+    if (state.pendingDeleteTxId) {
+      const txId = state.pendingDeleteTxId;
+      state.ledger = state.ledger.filter((t) => t.id !== txId);
+      cancelDeleteService();
+      commitAndRender();
+    }
+  }
+
+  function exportBackupJSON() {
+    const payload = {
+      app: 'Salon Mufida POS',
+      exportedAt: new Date().toISOString(),
+      services: state.services,
+      ledger: state.ledger
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `backup-salon-mufida-${todayInputDate()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function handleImportBackup(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result || '{}'));
+        if (!Array.isArray(parsed.services) || !Array.isArray(parsed.ledger)) {
+          alert('Format file backup tidak sesuai.');
+          return;
+        }
+        const validServices = parsed.services
+          .filter((s) => s && typeof s.name === 'string' && !Number.isNaN(Number(s.price)))
+          .map((s, idx) => ({
+            id: typeof s.id === 'string' ? s.id : `srv-${Date.now()}-${idx}`,
+            name: s.name.trim().slice(0, 80),
+            price: Math.max(0, Math.round(Number(s.price)))
+          }));
+
+        const validLedger = parsed.ledger
+          .filter((t) => t && (t.type === 'in' || t.type === 'out') && !Number.isNaN(Number(t.amount)) && t.timestamp)
+          .map((t, idx) => ({
+            id: typeof t.id === 'string' ? t.id : `TX-${Date.now()}-${idx}`,
+            type: t.type,
+            timestamp: String(t.timestamp),
+            formattedDate: formatDateTime(t.timestamp),
+            items: Array.isArray(t.items)
+              ? t.items.map((it) => ({
+                  serviceId: String(it.serviceId || ''),
+                  name: String(it.name || 'Layanan').slice(0, 80),
+                  price: Math.max(0, Math.round(Number(it.price) || 0)),
+                  qty: Math.max(1, Math.round(Number(it.qty) || 1))
+                }))
+              : [],
+            description: typeof t.description === 'string' ? t.description.slice(0, 140) : '',
+            note: typeof t.note === 'string' ? t.note.slice(0, 240) : '',
+            amount: Math.max(0, Math.round(Number(t.amount)))
+          }));
+
+        if (validServices.length > 0) state.services = validServices;
+        state.ledger = validLedger.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        commitAndRender();
+        alert('Data backup Salon Mufida berhasil dipulihkan.');
+      } catch {
+        alert('Gagal membaca file backup. Pastikan file JSON valid.');
+      } finally {
+        el.importBackupFile.value = '';
+      }
+    };
+    reader.readAsText(file);
   }
 
   function resetServiceForm() {
@@ -318,7 +645,7 @@
       type: 'in',
       timestamp: nowIso,
       formattedDate: formatDateTime(nowIso),
-      items: structuredClone(state.cart),
+      items: deepClone(state.cart),
       note: state.customerNote.trim(),
       amount: total
     };
@@ -335,9 +662,9 @@
   function recordExpense(e) {
     e.preventDefault();
     const desc = el.expenseDesc.value.trim();
-    const amount = Number(el.expenseAmount.value);
+    const amount = Math.round(Number(el.expenseAmount.value));
     const dateVal = el.expenseDate.value;
-    if (!desc || amount <= 0 || !dateVal) return;
+    if (!desc || Number.isNaN(amount) || amount < 1 || !dateVal) return;
 
     const nowTime = new Date().toTimeString().slice(0, 8);
     const isoTimestamp = new Date(`${dateVal}T${nowTime}`).toISOString();
@@ -376,7 +703,7 @@
     return `
       <div class="receipt-sheet">
         <div class="rcp-center">
-          <h3 class="rcp-title">Salon Cashier</h3>
+          <h3 class="rcp-title">SALON MUFIDA</h3>
           <div>Struk Layanan Resmi</div>
         </div>
         <hr class="rcp-divider" />
@@ -428,7 +755,7 @@
               <span class="service-price tabular">${formatCurrency(srv.price)}</span>
               <div class="service-controls">
                 <button type="button" class="icon-btn" data-action="edit" data-id="${srv.id}">Edit</button>
-                <button type="button" class="icon-btn" data-action="delete" data-id="${srv.id}">&times;</button>
+                <button type="button" class="icon-btn" data-action="delete" data-id="${srv.id}" aria-label="Hapus layanan">&times;</button>
               </div>
             </div>
             ${multiControlsHTML}
@@ -468,7 +795,7 @@
     }
 
     const previewOrder = {
-      id: 'PREVIEW',
+      id: 'MFD-PREVIEW',
       timestamp: new Date().toISOString(),
       items: state.cart.length ? state.cart : [{ name: 'Contoh Layanan', qty: 1, price: 0 }],
       note: state.customerNote.trim(),
@@ -499,7 +826,19 @@
     el.sumWeekOut.textContent = formatCurrency(week.outgoing);
     el.sumWeekNet.textContent = formatCurrency(week.net);
 
-    const month = calc('monthly');
+    const calcSelectedMonth = () => {
+      if (!state.filterMonth) return calc('monthly');
+      let incoming = 0;
+      let outgoing = 0;
+      for (const tx of state.ledger) {
+        if (getMonthKey(tx.timestamp) !== state.filterMonth) continue;
+        if (tx.type === 'in') incoming += tx.amount;
+        else outgoing += tx.amount;
+      }
+      return { incoming, outgoing, net: incoming - outgoing };
+    };
+
+    const month = calcSelectedMonth();
     el.sumMonthIn.textContent = formatCurrency(month.incoming);
     el.sumMonthOut.textContent = formatCurrency(month.outgoing);
     el.sumMonthNet.textContent = formatCurrency(month.net);
@@ -508,7 +847,9 @@
   function renderLedger() {
     const filtered = state.ledger.filter((tx) => {
       const typeMatch = state.filterType === 'all' || tx.type === state.filterType;
-      const periodMatch = isWithinPeriod(tx.timestamp, state.filterPeriod);
+      const periodMatch = state.filterMonth
+        ? getMonthKey(tx.timestamp) === state.filterMonth
+        : isWithinPeriod(tx.timestamp, state.filterPeriod);
       return typeMatch && periodMatch;
     });
 
@@ -528,18 +869,28 @@
             ? `<span class="ledger-note">Catatan: ${escapeHTML(tx.note)}</span>`
             : '';
 
+        const orderIdControl = isIncoming
+          ? `<div class="order-id-row">
+              <button type="button" class="order-id-link tabular" data-detail-id="${escapeHTML(tx.id)}">${escapeHTML(tx.id)}</button>
+              <button type="button" class="btn btn-ghost btn-xs" data-lookup-id="${escapeHTML(tx.id)}" title="Buka di halaman riwayat ID Order">Cek</button>
+            </div>`
+          : `<span class="ledger-note">${escapeHTML(tx.id)}</span>`;
+
         return `
           <tr>
-            <td class="tabular">${escapeHTML(formatDateTime(tx.timestamp))}<span class="ledger-note">${escapeHTML(tx.id)}</span></td>
+            <td class="tabular">${escapeHTML(formatDateTime(tx.timestamp))}${orderIdControl}</td>
             <td>${escapeHTML(summaryText)}${noteSub}</td>
             <td><span class="pill ${isIncoming ? 'pill-in' : 'pill-out'}">${isIncoming ? 'Masuk' : 'Keluar'}</span></td>
             <td class="num tabular ${isIncoming ? 'text-in' : 'text-out'}">${isIncoming ? '+' : '-'}${formatCurrency(tx.amount)}</td>
             <td class="num">
-              ${
-                isIncoming
-                  ? `<button type="button" class="btn btn-ghost btn-sm" data-reprint-id="${tx.id}">Cetak Ulang</button>`
-                  : `<span class="muted-label">—</span>`
-              }
+              <div style="display:inline-flex; gap:4px; align-items:center;">
+                ${
+                  isIncoming
+                    ? `<button type="button" class="btn btn-ghost btn-sm" data-reprint-id="${escapeHTML(tx.id)}">Cetak Ulang</button>`
+                    : ''
+                }
+                <button type="button" class="btn btn-ghost btn-sm" data-del-tx-id="${escapeHTML(tx.id)}" title="Hapus catatan transaksi">Hapus</button>
+              </div>
             </td>
           </tr>`;
       })
@@ -553,13 +904,45 @@
     renderMultiBar();
     renderCartAndPreview();
     renderSummaries();
+    renderMonthOptions();
     renderLedger();
+    if (state.currentView === 'lookup') {
+      renderLookupRecentChips();
+    }
   }
 
   function bindEvents() {
     el.toggleThemeBtn.addEventListener('click', () => {
       state.theme = state.theme === 'dark' ? 'light' : 'dark';
       commitAndRender();
+    });
+
+    el.navLookupBtn.addEventListener('click', () => {
+      switchView(state.currentView === 'lookup' ? 'pos' : 'lookup');
+    });
+
+    el.backToPosBtn.addEventListener('click', () => {
+      switchView('pos');
+    });
+
+    el.lookupForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      renderLookupResult(el.lookupInput.value);
+    });
+
+    el.lookupRecentChips.addEventListener('click', (e) => {
+      const chip = e.target.closest('[data-lookup-chip]');
+      if (!chip) return;
+      const id = chip.dataset.lookupChip;
+      el.lookupInput.value = id;
+      renderLookupResult(id);
+    });
+
+    el.lookupResult.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-reprint-id]');
+      if (!btn) return;
+      const order = state.ledger.find((tx) => tx.id === btn.dataset.reprintId);
+      if (order) printReceipt(order);
     });
 
     el.toggleMultiBtn.addEventListener('click', () => {
@@ -606,7 +989,7 @@
         editService(id);
       } else if (action === 'delete') {
         e.stopPropagation();
-        deleteService(id);
+        requestDeleteService(id);
       } else if (action === 'tile') {
         if (state.multiMode) {
           toggleMultiSelection(id);
@@ -614,6 +997,37 @@
           addToCart(id);
         }
       }
+    });
+
+    el.cancelDeleteBtn.addEventListener('click', cancelDeleteService);
+    el.confirmDeleteBtn.addEventListener('click', confirmDeleteService);
+    let deleteBackdropDown = false;
+    el.deleteModal.addEventListener('mousedown', (e) => {
+      deleteBackdropDown = e.target === el.deleteModal;
+    });
+    el.deleteModal.addEventListener('mouseup', (e) => {
+      if (deleteBackdropDown && e.target === el.deleteModal) cancelDeleteService();
+      deleteBackdropDown = false;
+    });
+
+    el.closeDetailBtn.addEventListener('click', closeOrderDetailModal);
+    let detailBackdropDown = false;
+    el.orderDetailModal.addEventListener('mousedown', (e) => {
+      detailBackdropDown = e.target === el.orderDetailModal;
+    });
+    el.orderDetailModal.addEventListener('mouseup', (e) => {
+      if (detailBackdropDown && e.target === el.orderDetailModal) closeOrderDetailModal();
+      detailBackdropDown = false;
+    });
+    el.detailPrintBtn.addEventListener('click', () => {
+      if (!state.activeDetailOrderId) return;
+      const order = state.ledger.find((tx) => tx.id === state.activeDetailOrderId);
+      if (order) printReceipt(order);
+    });
+    el.detailToLookupBtn.addEventListener('click', () => {
+      const targetId = state.activeDetailOrderId;
+      closeOrderDetailModal();
+      if (targetId) switchView('lookup', targetId);
     });
 
     el.cartItems.addEventListener('click', (e) => {
@@ -641,15 +1055,62 @@
 
     el.filterPeriod.addEventListener('change', (e) => {
       state.filterPeriod = e.target.value;
+      state.filterMonth = '';
+      el.filterMonth.value = '';
       renderLedger();
     });
 
-    el.ledgerBody.addEventListener('click', (e) => {
-      const btn = e.target.closest('[data-reprint-id]');
-      if (!btn) return;
-      const order = state.ledger.find((tx) => tx.id === btn.dataset.reprintId);
-      if (order) printReceipt(order);
+    const syncMonthSelection = (monthVal) => {
+      state.filterMonth = monthVal;
+      if (state.filterMonth) {
+        state.filterPeriod = 'all';
+        el.filterPeriod.value = 'all';
+      } else {
+        state.filterPeriod = 'monthly';
+        el.filterPeriod.value = 'monthly';
+      }
+      renderMonthOptions();
+      renderSummaries();
+      renderLedger();
+    };
+
+    el.filterMonth.addEventListener('change', (e) => {
+      syncMonthSelection(e.target.value);
     });
+
+    el.summaryMonthSelect.addEventListener('change', (e) => {
+      syncMonthSelection(e.target.value);
+    });
+
+    el.ledgerBody.addEventListener('click', (e) => {
+      const detailBtn = e.target.closest('[data-detail-id]');
+      if (detailBtn) {
+        openOrderDetailModal(detailBtn.dataset.detailId);
+        return;
+      }
+
+      const lookupBtn = e.target.closest('[data-lookup-id]');
+      if (lookupBtn) {
+        switchView('lookup', lookupBtn.dataset.lookupId);
+        return;
+      }
+
+      const reprintBtn = e.target.closest('[data-reprint-id]');
+      if (reprintBtn) {
+        const order = state.ledger.find((tx) => tx.id === reprintBtn.dataset.reprintId);
+        if (order) printReceipt(order);
+        return;
+      }
+
+      const delTxBtn = e.target.closest('[data-del-tx-id]');
+      if (delTxBtn) {
+        requestDeleteTx(delTxBtn.dataset.delTxId);
+      }
+    });
+
+    el.exportBackupBtn.addEventListener('click', exportBackupJSON);
+    el.importBackupBtn.addEventListener('click', () => el.importBackupFile.click());
+    el.importBackupFile.addEventListener('change', handleImportBackup);
 
     const updateNetworkStatus = () => {
       const online = navigator.onLine;
@@ -667,40 +1128,18 @@
         second: '2-digit'
       });
     };
-    updateClock();
-    setInterval(updateClock, 1000);
-  }
-
-  function registerServiceWorker() {
-    if (!('serviceWorker' in navigator)) return;
-
-    let refreshing = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (refreshing) return;
-      refreshing = true;
-      window.location.reload();
-    });
-
-    window.addEventListener('load', async () => {
-      try {
-        const reg = await navigator.serviceWorker.register(`./sw.js?v=${APP_VERSION}`, {
-          updateViaCache: 'none'
-        });
-        reg.update();
-
-        document.addEventListener('visibilitychange', () => {
-          if (document.visibilityState === 'visible') {
-            reg.update();
-          }
-        });
-      } catch (err) {
-        console.warn('Registrasi Service Worker gagal:', err);
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        if (!el.deleteModal.classList.contains('hidden')) cancelDeleteService();
+        if (!el.orderDetailModal.classList.contains('hidden')) closeOrderDetailModal();
       }
     });
+
+    updateClock();
+    setInterval(updateClock, 1000);
   }
 
   el.expenseDate.value = todayInputDate();
   bindEvents();
   commitAndRender();
-  registerServiceWorker();
 })();
