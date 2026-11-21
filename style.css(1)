@@ -65,7 +65,6 @@ body {
   gap: 16px;
 }
 
-/* Header */
 .topbar {
   display: flex;
   justify-content: space-between;
@@ -126,7 +125,6 @@ body {
   border-color: #FDE68A;
 }
 
-/* Summary Grid */
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -191,7 +189,6 @@ body {
   color: var(--out-color);
 }
 
-/* Two-Column Workspace */
 .workspace {
   display: grid;
   grid-template-columns: 1.45fr 1fr;
@@ -220,7 +217,6 @@ body {
   font-weight: 600;
 }
 
-/* Inputs & Buttons */
 input,
 select,
 textarea {
@@ -289,9 +285,24 @@ textarea:focus {
   color: var(--text);
 }
 
+.btn-danger {
+  background: var(--out-color);
+  color: #FFFFFF;
+  border-color: var(--out-color);
+}
+
+.btn-danger:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
 .btn-sm {
   padding: 5px 9px;
   font-size: 12px;
+}
+
+.btn-xs {
+  padding: 2px 6px;
+  font-size: 11px;
 }
 
 .btn-block {
@@ -300,7 +311,6 @@ textarea:focus {
   font-size: 14px;
 }
 
-/* Service Catalog, Multi-Pilih & Paket Cepat */
 .catalog-head {
   flex-wrap: wrap;
 }
@@ -464,14 +474,12 @@ textarea:focus {
   font-weight: 600;
 }
 
-/* Expense Form */
 .expense-form {
   display: grid;
   grid-template-columns: 1.6fr 1fr 1fr auto;
   gap: 8px;
 }
 
-/* Ledger Table */
 .ledger-head {
   flex-wrap: wrap;
 }
@@ -479,6 +487,7 @@ textarea:focus {
 .filters {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .filters select {
@@ -547,7 +556,30 @@ textarea:focus {
   margin-top: 2px;
 }
 
-/* Cart */
+.order-id-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 3px;
+}
+
+.order-id-link {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.order-id-link:hover {
+  opacity: 0.75;
+}
+
 .cart-items {
   display: flex;
   flex-direction: column;
@@ -655,7 +687,6 @@ textarea:focus {
   color: var(--text);
 }
 
-/* Thermal Receipt Preview */
 .receipt-sheet {
   width: 100%;
   max-width: 300px;
@@ -677,6 +708,7 @@ textarea:focus {
   font-size: 15px;
   font-weight: 700;
   margin: 0 0 2px;
+  letter-spacing: 0.04em;
 }
 
 .rcp-divider {
@@ -705,11 +737,107 @@ textarea:focus {
   font-weight: 700;
 }
 
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 50;
+}
+
+.modal-card {
+  width: 100%;
+  max-width: 440px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.modal-head h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.modal-text {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.detail-box {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.detail-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.detail-items {
+  border-top: 1px dashed var(--border);
+  border-bottom: 1px dashed var(--border);
+  padding: 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.lookup-search-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.lookup-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.lookup-result {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  padding: 14px;
+}
+
 #print-area {
   display: none;
 }
 
-/* Responsive Stacking */
 @media (max-width: 960px) {
   .workspace {
     grid-template-columns: 1fr;
@@ -720,12 +848,12 @@ textarea:focus {
   }
 
   .expense-form,
-  .inline-form {
+  .inline-form,
+  .lookup-search-row {
     grid-template-columns: 1fr;
   }
 }
 
-/* Thermal Printer Output (58mm / 80mm) */
 @media print {
   @page {
     margin: 2mm;
@@ -736,7 +864,8 @@ textarea:focus {
     background: #FFFFFF !important;
   }
 
-  .app-shell {
+  .app-shell,
+  .modal-backdrop {
     display: none !important;
   }
 
