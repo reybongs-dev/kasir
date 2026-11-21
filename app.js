@@ -88,7 +88,6 @@
     filterPeriod: document.getElementById('filter-period'),
     filterMonth: document.getElementById('filter-month'),
     summaryMonthSelect: document.getElementById('summary-month-select'),
-    sumMonthTitle: document.getElementById('sum-month-title'),
     ledgerBody: document.getElementById('ledger-body'),
     clearCartBtn: document.getElementById('clear-cart-btn'),
     cartItems: document.getElementById('cart-items'),
@@ -232,7 +231,6 @@
       )
     ];
     el.summaryMonthSelect.innerHTML = summaryOptionsHTML.join('');
-    el.sumMonthTitle.textContent = state.filterMonth ? formatMonthLabel(state.filterMonth) : 'Bulan Ini';
   }
 
   function isWithinPeriod(isoString, period) {
